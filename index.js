@@ -1,3 +1,7 @@
+//////////////////////////////////////////////////////////////////////////
+// Configuration                                                        //
+//////////////////////////////////////////////////////////////////////////
+
 // we don't use HTTPS (WSS) here because CloudFlare (our CDN) only supports
 // websockets for "enterprise" customers. so for now we use HTTP (WS) and
 // bypass CloudFlare.
@@ -34,7 +38,7 @@ app.use(function(req, res, next) {
   next();
 });
 
-// generate UUIDs
+// for generating UUIDs
 var uuid = require('node-uuid');
 
 function makeId() {
@@ -67,15 +71,6 @@ var sessions = {};
 //   typing: false                  // whether the user is typing or not
 // }
 var users = {};
-
-//////////////////////////////////////////////////////////////////////////
-// Web endpoints                                                        //
-//////////////////////////////////////////////////////////////////////////
-
-// landing page
-app.get('/', function(req, res) {
-  res.send('This is the server for Netflix Party.');
-});
 
 //////////////////////////////////////////////////////////////////////////
 // Websockets API                                                       //
