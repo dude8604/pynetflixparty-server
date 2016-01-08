@@ -298,6 +298,23 @@ io.on('connection', function(socket) {
     if (sessions[sessionId].userIds.length === 0) {
       delete sessions[sessionId];
       console.log('Session ' + sessionId + ' was deleted because there were no more users in it.');
+    } else {
+      var anyoneTyping = false;
+      for (var i = 0; i < sessions[sessionId].userIds.length; i += 1) {
+        if (users[sessions[sessionId].userIds[i]].typing) {
+          anyoneTyping = true;
+          break;
+        }
+      }
+
+      lodash.forEach(sessions[sessionId].userIds, function(id) {
+        if (id !== userId) {
+          console.log('Sending presence to user ' + id + '.');
+          users[id].socket.emit('setPresence', {
+            anyoneTyping: anyoneTyping
+          });
+        }
+      });
     }
   });
 
