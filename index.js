@@ -205,10 +205,14 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (!validateMessages(data.messages)) {
-      fn({ errorMessage: 'Invalid messages.' });
-      console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-      return;
+    if (data.messages === undefined) { // legacy clients don't have this attribute
+      data.messages = [];
+    } else {
+      if (!validateMessages(data.messages)) {
+        fn({ errorMessage: 'Invalid messages.' });
+        console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
+        return;
+      }
     }
 
     if (!validateState(data.state)) {
