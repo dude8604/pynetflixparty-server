@@ -76,6 +76,66 @@ var users = {};
 // Websockets API                                                       //
 //////////////////////////////////////////////////////////////////////////
 
+function validateId(id) {
+  return typeof id === 'string' && id.length === 16;
+}
+
+function validateLastKnownTime(lastKnownTime) {
+  return typeof lastKnownTime === 'number' &&
+    lastKnownTime % 1 === 0 &&
+    lastKnownTime >= 0;
+}
+
+function validateLastKnownTimeUpdatedAt(lastKnownTimeUpdatedAt) {
+  return typeof lastKnownTimeUpdatedAt === 'number' &&
+    lastKnownTimeUpdatedAt % 1 === 0 &&
+    lastKnownTimeUpdatedAt >= 0;
+}
+
+function validateMessages(messages) {
+  if (typeof messages !== 'object' || typeof messages.length !== 'number') {
+    return false;
+  }
+  for (var i in messages) {
+    i = parseInt(i);
+    if (isNaN(i)) {
+      return false;
+    }
+    if (typeof i !== 'number' || i % 1 !== 0 || i < 0 || i >= messages.length) {
+      return false;
+    }
+    if (typeof messages[i] !== 'object') {
+      return false;
+    }
+    if (typeof messages[i].userId !== 'string') {
+      return false;
+    }
+    if (typeof messages[i].body !== 'string') {
+      return false;
+    }
+    if (typeof messages[i].timestamp !== 'number' || messages[i].timestamp % 1 !== 0 || messages[i].timestamp < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function validateState(state) {
+  return typeof state === 'string' && (state === 'playing' || state === 'paused');
+}
+
+function validateVideoId(videoId) {
+  return typeof videoId === 'number' && videoId % 1 === 0 && videoId >= 0;
+}
+
+function validateTyping(typing) {
+  return typeof typing === 'boolean';
+}
+
+function validateMessageBody(body) {
+  return typeof body === 'string' && body.replace(/^\s+|\s+$/g, '') !== '';
+}
+
 io.on('connection', function(socket) {
   var userId = makeId();
   users[userId] = {
@@ -88,83 +148,45 @@ io.on('connection', function(socket) {
   console.log('User ' + userId + ' connected.');
 
   socket.on('reboot', function(data, fn) {
-    if (typeof data.sessionId !== 'string' || data.sessionId.length !== 16) {
+    if (!validateId(data.sessionId)) {
       fn({ errorMessage: 'Invalid session ID.' });
       console.log('User ' + userId + ' attempted to reboot invalid session ' + JSON.stringify(data.sessionId) + '.');
       return;
     }
 
-    if (typeof data.lastKnownTime !== 'number' || data.lastKnownTime % 1 !== 0 || data.lastKnownTime < 0) {
+    if (!validateLastKnownTime(data.lastKnownTime)) {
       fn({ errorMessage: 'Invalid lastKnownTime.' });
       console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid lastKnownTime ' + JSON.stringify(data.lastKnownTime) + '.');
       return;
     }
 
-    if (typeof data.lastKnownTimeUpdatedAt !== 'number' || data.lastKnownTimeUpdatedAt % 1 !== 0 || data.lastKnownTimeUpdatedAt < 0) {
+    if (!validateLastKnownTimeUpdatedAt(data.lastKnownTimeUpdatedAt)) {
       fn({ errorMessage: 'Invalid lastKnownTimeUpdatedAt.' });
       console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid lastKnownTimeUpdatedAt ' + JSON.stringify(data.lastKnownTimeUpdatedAt) + '.');
       return;
     }
 
-    if (data.messages === undefined) { // legacy clients don't have this attribute
-      data.messages = [];
-    } else {
-      if (typeof data.messages !== 'object' || typeof data.messages.length !== 'number') {
-        fn({ errorMessage: 'Invalid messages.' });
-        console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-        return;
-      }
-
-      for (var i in data.messages) {
-        i = parseInt(i);
-
-        if (typeof i !== 'number' || i % 1 !== 0 || i < 0 || i >= data.messages.length) {
-          fn({ errorMessage: 'Invalid messages.' });
-          console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-          return;
-        }
-
-        if (typeof data.messages[i] !== 'object') {
-          fn({ errorMessage: 'Invalid messages.' });
-          console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-          return;
-        }
-
-        if (typeof data.messages[i].userId !== 'string') {
-          fn({ errorMessage: 'Invalid messages.' });
-          console.log('User ' + userId + ' attempted to reboot session with invalid userId ' + JSON.stringify(data.userId) + '.');
-          return;
-        }
-
-        if (typeof data.messages[i].body !== 'string') {
-          fn({ errorMessage: 'Invalid messages.' });
-          console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-          return;
-        }
-
-        if (typeof data.messages[i].timestamp !== 'number' || data.messages[i].timestamp % 1 !== 0 || data.messages[i].timestamp < 0) {
-          fn({ errorMessage: 'Invalid messages.' });
-          console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-          return;
-        }
-      }
+    if (!validateMessages(data.messages)) {
+      fn({ errorMessage: 'Invalid messages.' });
+      console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
+      return;
     }
 
-    if (typeof data.state !== 'string' || (data.state !== 'playing' && data.state !== 'paused')) {
+    if (!validateState(data.state)) {
       fn({ errorMessage: 'Invalid state.' });
       console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid state ' + JSON.stringify(data.state) + '.');
       return;
     }
 
     if (data.userId !== undefined) { // legacy clients don't have this attribute
-      if (typeof data.userId !== 'string') {
-        fn({ errorMessage: 'Invalid state.' });
+      if (!validateId(data.userId)) {
+        fn({ errorMessage: 'Invalid userId.' });
         console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid userId ' + JSON.stringify(data.userId) + '.');
         return;
       }
     }
 
-    if (typeof data.videoId !== 'number' || data.videoId % 1 !== 0 || data.videoId < 0) {
+    if (!validateVideoId(data.videoId)) {
       fn({ errorMessage: 'Invalid video ID.' });
       console.log('User ' + userId + ' attempted to reboot session with invalid video ' + JSON.stringify(data.videoId) + '.');
       return;
@@ -213,7 +235,7 @@ io.on('connection', function(socket) {
   });
 
   socket.on('createSession', function(videoId, fn) {
-    if (typeof videoId !== 'number' || videoId % 1 !== 0 || videoId < 0) {
+    if (!validateVideoId(videoId)) {
       fn({ errorMessage: 'Invalid video ID.' });
       console.log('User ' + userId + ' attempted to create session with invalid video ' + JSON.stringify(videoId) + '.');
       return;
@@ -247,7 +269,7 @@ io.on('connection', function(socket) {
   });
 
   socket.on('joinSession', function(sessionId, fn) {
-    if (typeof sessionId !== 'string' || !sessions.hasOwnProperty(sessionId)) {
+    if (!validateId(sessionId) || !sessions.hasOwnProperty(sessionId)) {
       fn({ errorMessage: 'Invalid session ID.' });
       console.log('User ' + userId + ' attempted to join nonexistent session ' + JSON.stringify(sessionId) + '.');
       return;
@@ -320,19 +342,19 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (typeof data.lastKnownTime !== 'number' || data.lastKnownTime % 1 !== 0 || data.lastKnownTime < 0) {
+    if (!validateLastKnownTime(data.lastKnownTime)) {
       fn({ errorMessage: 'Invalid lastKnownTime.' });
       console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid lastKnownTime ' + JSON.stringify(data.lastKnownTime) + '.');
       return;
     }
 
-    if (typeof data.lastKnownTimeUpdatedAt !== 'number' || data.lastKnownTimeUpdatedAt % 1 !== 0 || data.lastKnownTimeUpdatedAt < 0) {
+    if (!validateLastKnownTimeUpdatedAt(data.lastKnownTimeUpdatedAt)) {
       fn({ errorMessage: 'Invalid lastKnownTimeUpdatedAt.' });
       console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid lastKnownTimeUpdatedAt ' + JSON.stringify(data.lastKnownTimeUpdatedAt) + '.');
       return;
     }
 
-    if (typeof data.state !== 'string' || (data.state !== 'playing' && data.state !== 'paused')) {
+    if (!validateState(data.state)) {
       fn({ errorMessage: 'Invalid state.' });
       console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid state ' + JSON.stringify(data.state) + '.');
       return;
@@ -364,7 +386,7 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (typeof data.typing !== 'boolean') {
+    if (!validateTyping(data.typing)) {
       fn({ errorMessage: 'Invalid typing.' });
       console.log('User ' + userId + ' attempted to set invalid presence ' + JSON.stringify(data.typing) + '.');
       return;
@@ -404,8 +426,8 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (typeof data.body !== 'string') {
-      fn({ errorMessage: 'Invalid state.' });
+    if (!validateMessageBody(data.body)) {
+      fn({ errorMessage: 'Invalid message body.' });
       console.log('User ' + userId + ' attempted to send an invalid message ' + JSON.stringify(data.body) + '.');
       return;
     }
