@@ -110,24 +110,26 @@ function validateMessages(messages) {
     return false;
   }
   for (var i in messages) {
-    i = parseInt(i);
-    if (isNaN(i)) {
-      return false;
-    }
-    if (typeof i !== 'number' || i % 1 !== 0 || i < 0 || i >= messages.length) {
-      return false;
-    }
-    if (typeof messages[i] !== 'object') {
-      return false;
-    }
-    if (typeof messages[i].userId !== 'string') {
-      return false;
-    }
-    if (typeof messages[i].body !== 'string') {
-      return false;
-    }
-    if (typeof messages[i].timestamp !== 'number' || messages[i].timestamp % 1 !== 0 || messages[i].timestamp < 0) {
-      return false;
+    if (messages.hasOwnProperty(i)) {
+      i = parseInt(i);
+      if (isNaN(i)) {
+        return false;
+      }
+      if (typeof i !== 'number' || i % 1 !== 0 || i < 0 || i >= messages.length) {
+        return false;
+      }
+      if (typeof messages[i] !== 'object') {
+        return false;
+      }
+      if (typeof messages[i].userId !== 'string') {
+        return false;
+      }
+      if (typeof messages[i].body !== 'string') {
+        return false;
+      }
+      if (typeof messages[i].timestamp !== 'number' || messages[i].timestamp % 1 !== 0 || messages[i].timestamp < 0) {
+        return false;
+      }
     }
   }
   return true;
