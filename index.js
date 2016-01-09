@@ -38,13 +38,6 @@ app.use(function(req, res, next) {
   next();
 });
 
-// for generating UUIDs
-var uuid = require('node-uuid');
-
-function makeId() {
-  return uuid.v4().replace(/-/g, '').substr(16);
-}
-
 //////////////////////////////////////////////////////////////////////////
 // State                                                                //
 //////////////////////////////////////////////////////////////////////////
@@ -52,12 +45,12 @@ function makeId() {
 // in-memory store of all the sessions
 // the keys are the session IDs (strings)
 // the values have the form: {
-//   id: '84dba68dcea2952c',                                                                // 8 random octets
+//   id: 'cba82ca5f59a35e6',                                                                // 8 random octets
 //   lastKnownTime: 123,                                                                    // milliseconds from the start of the video
 //   lastKnownTimeUpdatedAt: new Date(),                                                    // when we last received a time update
-//   messages: [{ userId: '9a3078cd522cc3ff', body: 'hello', timestamp: new Date() }, ...], // the chat messages for this session
+//   messages: [{ userId: '3d16d961f67e9792', body: 'hello', timestamp: new Date() }, ...], // the chat messages for this session
 //   state: 'playing' | 'paused',                                                           // whether the video is playing or paused
-//   userIds: ['9a3078cd522cc3ff', ...],                                                    // ids of the users in the session
+//   userIds: ['3d16d961f67e9792', ...],                                                    // ids of the users in the session
 //   videoId: 123                                                                           // Netflix id the video
 // }
 var sessions = {};
@@ -65,12 +58,22 @@ var sessions = {};
 // in-memory store of all the users
 // the keys are the user IDs (strings)
 // the values have the form: {
-//   id: '9a3078cd522cc3ff',        // 8 random octets
-//   sessionId: '84dba68dcea2952c', // id of the session, if one is joined
+//   id: '3d16d961f67e9792',        // 8 random octets
+//   sessionId: 'cba82ca5f59a35e6', // id of the session, if one is joined
 //   socket: <websocket>,           // the websocket
 //   typing: false                  // whether the user is typing or not
 // }
 var users = {};
+
+// generate a random ID with 64 bits of entropy
+function makeId() {
+  var result = '';
+  var hexChars = '0123456789abcdef';
+  for (var i = 0; i < 16; i += 1) {
+    result += hexChars[Math.floor(Math.random() * 16)];
+  }
+  return result;
+}
 
 //////////////////////////////////////////////////////////////////////////
 // Websockets API                                                       //
