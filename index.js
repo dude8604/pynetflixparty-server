@@ -147,6 +147,42 @@ io.on('connection', function(socket) {
   socket.emit('userId', userId);
   console.log('User ' + userId + ' connected.');
 
+  var broadcastPresence = function(sessionId, notToThisUserId) {
+    var anyoneTyping = false;
+    for (var i = 0; i < sessions[sessionId].userIds.length; i += 1) {
+      if (users[sessions[sessionId].userIds[i]].typing) {
+        anyoneTyping = true;
+        break;
+      }
+    }
+
+    lodash.forEach(sessions[sessionId].userIds, function(id) {
+      if (id !== notToThisUserId) {
+        console.log('Sending presence to user ' + id + '.');
+        users[id].socket.emit('setPresence', {
+          anyoneTyping: anyoneTyping
+        });
+      }
+    });
+  };
+
+  var leaveSession = function() {
+    if (users[userId].sessionId === null) {
+      return;
+    }
+
+    var sessionId = users[userId].sessionId;
+    lodash.pull(sessions[sessionId].userIds, userId);
+    users[userId].sessionId = null;
+
+    if (sessions[sessionId].userIds.length === 0) {
+      delete sessions[sessionId];
+      console.log('Session ' + sessionId + ' was deleted because there were no more users in it.');
+    } else {
+      broadcastPresence(sessionId, null);
+    }
+  };
+
   socket.on('reboot', function(data, fn) {
     if (!validateId(data.sessionId)) {
       fn({ errorMessage: 'Invalid session ID.' });
@@ -306,33 +342,10 @@ io.on('connection', function(socket) {
     }
 
     var sessionId = users[userId].sessionId;
-    lodash.pull(sessions[sessionId].userIds, userId);
-    users[userId].sessionId = null;
+    leaveSession();
 
     fn(null);
     console.log('User ' + userId + ' left session ' + sessionId + '.');
-
-    if (sessions[sessionId].userIds.length === 0) {
-      delete sessions[sessionId];
-      console.log('Session ' + sessionId + ' was deleted because there were no more users in it.');
-    } else {
-      var anyoneTyping = false;
-      for (var i = 0; i < sessions[sessionId].userIds.length; i += 1) {
-        if (users[sessions[sessionId].userIds[i]].typing) {
-          anyoneTyping = true;
-          break;
-        }
-      }
-
-      lodash.forEach(sessions[sessionId].userIds, function(id) {
-        if (id !== userId) {
-          console.log('Sending presence to user ' + id + '.');
-          users[id].socket.emit('setPresence', {
-            anyoneTyping: anyoneTyping
-          });
-        }
-      });
-    }
   });
 
   socket.on('updateSession', function(data, fn) {
@@ -401,22 +414,7 @@ io.on('connection', function(socket) {
       console.log('User ' + userId + ' is done typing.');
     }
 
-    var anyoneTyping = false;
-    for (var i = 0; i < sessions[users[userId].sessionId].userIds.length; i += 1) {
-      if (users[sessions[users[userId].sessionId].userIds[i]].typing) {
-        anyoneTyping = true;
-        break;
-      }
-    }
-
-    lodash.forEach(sessions[users[userId].sessionId].userIds, function(id) {
-      if (id !== userId) {
-        console.log('Sending presence to user ' + id + '.');
-        users[id].socket.emit('setPresence', {
-          anyoneTyping: anyoneTyping
-        });
-      }
-    });
+    broadcastPresence(users[userId].sessionId, userId);
   });
 
   socket.on('sendMessage', function(data, fn) {
@@ -458,36 +456,7 @@ io.on('connection', function(socket) {
   });
 
   socket.on('disconnect', function() {
-    var sessionId = users[userId].sessionId;
-    if (sessionId !== null) {
-      lodash.pull(sessions[sessionId].userIds, userId);
-      users[userId].sessionId = null;
-
-      console.log('User ' + userId + ' left session ' + sessionId + '.');
-
-      if (sessions[sessionId].userIds.length === 0) {
-        delete sessions[sessionId];
-        console.log('Session ' + sessionId + ' was deleted because there were no more users in it.');
-      } else {
-        var anyoneTyping = false;
-        for (var i = 0; i < sessions[sessionId].userIds.length; i += 1) {
-          if (users[sessions[sessionId].userIds[i]].typing) {
-            anyoneTyping = true;
-            break;
-          }
-        }
-
-        lodash.forEach(sessions[sessionId].userIds, function(id) {
-          if (id !== userId) {
-            console.log('Sending presence to user ' + id + '.');
-            users[id].socket.emit('setPresence', {
-              anyoneTyping: anyoneTyping
-            });
-          }
-        });
-      }
-    }
-
+    leaveSession();
     delete users[userId];
     console.log('User ' + userId + ' disconnected.');
   });
