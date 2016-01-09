@@ -106,7 +106,7 @@ function validateLastKnownTimeUpdatedAt(lastKnownTimeUpdatedAt) {
 }
 
 function validateMessages(messages) {
-  if (typeof messages !== 'object' || typeof messages.length !== 'number') {
+  if (typeof messages !== 'object' || messages === null || typeof messages.length !== 'number') {
     return false;
   }
   for (var i in messages) {
@@ -118,7 +118,7 @@ function validateMessages(messages) {
       if (typeof i !== 'number' || i % 1 !== 0 || i < 0 || i >= messages.length) {
         return false;
       }
-      if (typeof messages[i] !== 'object') {
+      if (typeof messages[i] !== 'object' || messages[i] === null) {
         return false;
       }
       if (typeof messages[i].userId !== 'string') {
@@ -471,7 +471,11 @@ io.on('connection', function(socket) {
 
   socket.on('ping', function(data, fn) {
     fn((new Date()).getTime());
-    console.log('User ' + userId + ' pinged.');
+    if (typeof data === 'object' && data !== null && typeof data.version === 'string') {
+      console.log('User ' + userId + ' pinged with version ' + data.version + '.');
+    } else {
+      console.log('User ' + userId + ' pinged.');
+    }
   });
 
   socket.on('disconnect', function() {
