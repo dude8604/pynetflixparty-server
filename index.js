@@ -440,7 +440,7 @@ io.on('connection', function(socket) {
       ));
 
     var stateUpdated = sessions[users[userId].sessionId].state !== data.state;
-    var timeUpdated = Math.abs(newPredictedTime - oldPredictedTime) >= 1000;
+    var timeUpdated = Math.abs(newPredictedTime - oldPredictedTime) > 2500;
 
     var hours = Math.floor(newPredictedTime / (1000 * 60 * 60));
     newPredictedTime -= hours * 1000 * 60 * 60;
