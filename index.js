@@ -561,7 +561,9 @@ io.on('connection', function(socket) {
   });
 
   socket.on('disconnect', function() {
-    sendMessage(userId, 'left', true);
+    if (users[userId].sessionId !== null) {
+      sendMessage(userId, 'left', true);
+    }
     leaveSession();
     delete users[userId];
     console.log('User ' + userId + ' disconnected.');
