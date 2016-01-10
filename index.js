@@ -305,6 +305,7 @@ io.on('connection', function(socket) {
         messages: lodash.map(data.messages, function(message) { return {
           userId: message.userId,
           body: message.body,
+          isSystemMessage: message.isSystemMessage,
           timestamp: new Date(message.timestamp)
         }; }),
         state: data.state,
@@ -347,9 +348,10 @@ io.on('connection', function(socket) {
       lastKnownTime: sessions[users[userId].sessionId].lastKnownTime,
       lastKnownTimeUpdatedAt: sessions[users[userId].sessionId].lastKnownTimeUpdatedAt.getTime(),
       messages: lodash.map(sessions[users[userId].sessionId].messages, function(message) { return {
-        userId: message.userId,
         body: message.body,
-        timestamp: message.timestamp.getTime()
+        isSystemMessage: message.isSystemMessage,
+        timestamp: message.timestamp.getTime(),
+        userId: message.userId
       }; }),
       sessionId: users[userId].sessionId,
       state: sessions[users[userId].sessionId].state
@@ -380,9 +382,10 @@ io.on('connection', function(socket) {
       lastKnownTime: sessions[sessionId].lastKnownTime,
       lastKnownTimeUpdatedAt: sessions[sessionId].lastKnownTimeUpdatedAt.getTime(),
       messages: lodash.map(sessions[sessionId].messages, function(message) { return {
-        userId: message.userId,
         body: message.body,
-        timestamp: message.timestamp.getTime()
+        isSystemMessage: message.isSystemMessage,
+        timestamp: message.timestamp.getTime(),
+        userId: message.userId
       }; }),
       state: sessions[sessionId].state
     });
@@ -558,6 +561,7 @@ io.on('connection', function(socket) {
   });
 
   socket.on('disconnect', function() {
+    sendMessage(userId, 'left', true);
     leaveSession();
     delete users[userId];
     console.log('User ' + userId + ' disconnected.');
