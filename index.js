@@ -535,7 +535,20 @@ io.on('connection', function(socket) {
     console.log('User ' + userId + ' sent message ' + data.body + '.');
   });
 
+  // legacy clients use the 'ping' event
+  // new clients use the identical event 'getServerTime' (below) instead,
+  // because apparently the new socket.io client reserves 'ping' as a
+  // special undocumented event...
   socket.on('ping', function(data, fn) {
+    fn((new Date()).getTime());
+    if (typeof data === 'object' && data !== null && typeof data.version === 'string') {
+      console.log('User ' + userId + ' pinged with version ' + data.version + '.');
+    } else {
+      console.log('User ' + userId + ' pinged.');
+    }
+  });
+
+  socket.on('getServerTime', function(data, fn) {
     fn((new Date()).getTime());
     if (typeof data === 'object' && data !== null && typeof data.version === 'string') {
       console.log('User ' + userId + ' pinged with version ' + data.version + '.');
