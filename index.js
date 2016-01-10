@@ -99,10 +99,14 @@ function validateLastKnownTime(lastKnownTime) {
     lastKnownTime >= 0;
 }
 
-function validateLastKnownTimeUpdatedAt(lastKnownTimeUpdatedAt) {
-  return typeof lastKnownTimeUpdatedAt === 'number' &&
-    lastKnownTimeUpdatedAt % 1 === 0 &&
-    lastKnownTimeUpdatedAt >= 0;
+function validateTimestamp(timestamp) {
+  return typeof timestamp === 'number' &&
+    timestamp % 1 === 0 &&
+    timestamp >= 0;
+}
+
+function validateBoolean(boolean) {
+  return typeof boolean === 'boolean';
 }
 
 function validateMessages(messages) {
@@ -121,13 +125,19 @@ function validateMessages(messages) {
       if (typeof messages[i] !== 'object' || messages[i] === null) {
         return false;
       }
-      if (typeof messages[i].userId !== 'string') {
+      if (!validateMessageBody(messages[i].body)) {
         return false;
       }
-      if (typeof messages[i].body !== 'string') {
+      if (messages[i].isSystemMessage === undefined) {
+        messages[i].isSystemMessage = false;
+      }
+      if (!validateBoolean(messages[i].isSystemMessage)) {
         return false;
       }
-      if (typeof messages[i].timestamp !== 'number' || messages[i].timestamp % 1 !== 0 || messages[i].timestamp < 0) {
+      if (!validateTimestamp(messages[i].timestamp)) {
+        return false;
+      }
+      if (!validateId(messages[i].userId)) {
         return false;
       }
     }
@@ -143,12 +153,16 @@ function validateVideoId(videoId) {
   return typeof videoId === 'number' && videoId % 1 === 0 && videoId >= 0;
 }
 
-function validateTyping(typing) {
-  return typeof typing === 'boolean';
-}
-
 function validateMessageBody(body) {
   return typeof body === 'string' && body.replace(/^\s+|\s+$/g, '') !== '';
+}
+
+function padIntegerWithZeros(x, minWidth) {
+  var numStr = String(x);
+  while (numStr.length < minWidth) {
+    numStr = '0' + numStr;
+  }
+  return numStr;
 }
 
 io.on('connection', function(socket) {
@@ -198,6 +212,26 @@ io.on('connection', function(socket) {
     }
   };
 
+  var sendMessage = function(fromUserId, body, isSystemMessage) {
+    var message = {
+      body: body,
+      isSystemMessage: isSystemMessage,
+      timestamp: new Date(),
+      userId: fromUserId
+    };
+    sessions[users[userId].sessionId].messages.push(message);
+
+    lodash.forEach(sessions[users[userId].sessionId].userIds, function(id) {
+      console.log('Sending message to user ' + id + '.');
+      users[id].socket.emit('sendMessage', {
+        body: message.body,
+        isSystemMessage: isSystemMessage,
+        timestamp: message.timestamp.getTime(),
+        userId: message.userId
+      });
+    });
+  };
+
   socket.on('reboot', function(data, fn) {
     if (!validateId(data.sessionId)) {
       fn({ errorMessage: 'Invalid session ID.' });
@@ -211,7 +245,7 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (!validateLastKnownTimeUpdatedAt(data.lastKnownTimeUpdatedAt)) {
+    if (!validateTimestamp(data.lastKnownTimeUpdatedAt)) {
       fn({ errorMessage: 'Invalid lastKnownTimeUpdatedAt.' });
       console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid lastKnownTimeUpdatedAt ' + JSON.stringify(data.lastKnownTimeUpdatedAt) + '.');
       return;
@@ -320,6 +354,7 @@ io.on('connection', function(socket) {
       sessionId: users[userId].sessionId,
       state: sessions[users[userId].sessionId].state
     });
+    sendMessage(userId, 'created the session', true);
     console.log('User ' + userId + ' created session ' + users[userId].sessionId + ' with video ' + JSON.stringify(videoId) + '.');
   });
 
@@ -338,6 +373,7 @@ io.on('connection', function(socket) {
 
     users[userId].sessionId = sessionId;
     sessions[sessionId].userIds.push(userId);
+    sendMessage(userId, 'joined', true);
 
     fn({
       videoId: sessions[sessionId].videoId,
@@ -360,6 +396,7 @@ io.on('connection', function(socket) {
       return;
     }
 
+    sendMessage(userId, 'left', true);
     var sessionId = users[userId].sessionId;
     leaveSession();
 
@@ -380,7 +417,7 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (!validateLastKnownTimeUpdatedAt(data.lastKnownTimeUpdatedAt)) {
+    if (!validateTimestamp(data.lastKnownTimeUpdatedAt)) {
       fn({ errorMessage: 'Invalid lastKnownTimeUpdatedAt.' });
       console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid lastKnownTimeUpdatedAt ' + JSON.stringify(data.lastKnownTimeUpdatedAt) + '.');
       return;
@@ -392,9 +429,52 @@ io.on('connection', function(socket) {
       return;
     }
 
+    var now = (new Date()).getTime();
+    var oldPredictedTime = sessions[users[userId].sessionId].lastKnownTime +
+      (sessions[users[userId].sessionId].state === 'paused' ? 0 : (
+        now - sessions[users[userId].sessionId].lastKnownTimeUpdatedAt.getTime()
+      ));
+    var newPredictedTime = data.lastKnownTime +
+      (data.state === 'paused' ? 0 : (
+        now - data.lastKnownTimeUpdatedAt
+      ));
+
+    var stateUpdated = sessions[users[userId].sessionId].state !== data.state;
+    var timeUpdated = Math.abs(newPredictedTime - oldPredictedTime) >= 1000;
+
+    var hours = Math.floor(newPredictedTime / (1000 * 60 * 60));
+    newPredictedTime -= hours * 1000 * 60 * 60;
+    var minutes = Math.floor(newPredictedTime / (1000 * 60));
+    newPredictedTime -= minutes * 1000 * 60;
+    var seconds = Math.floor(newPredictedTime / 1000);
+    newPredictedTime -= seconds * 1000;
+
+    var timeStr;
+    if (hours > 0) {
+      timeStr = String(hours) + ':' + String(minutes) + ':' + padIntegerWithZeros(seconds, 2);
+    } else {
+      timeStr = String(minutes) + ':' + padIntegerWithZeros(seconds, 2);
+    }
+
     sessions[users[userId].sessionId].lastKnownTime = data.lastKnownTime;
     sessions[users[userId].sessionId].lastKnownTimeUpdatedAt = new Date(data.lastKnownTimeUpdatedAt);
     sessions[users[userId].sessionId].state = data.state;
+
+    if (stateUpdated && timeUpdated) {
+      if (data.state === 'playing') {
+        sendMessage(userId, 'jumped to ' + timeStr + ' and started playing the video', true);
+      } else {
+        sendMessage(userId, 'jumped to ' + timeStr + ' and paused the video', true);
+      }
+    } else if (stateUpdated) {
+      if (data.state === 'playing') {
+        sendMessage(userId, 'started playing the video', true);
+      } else {
+        sendMessage(userId, 'paused the video', true);
+      }
+    } else if (timeUpdated) {
+      sendMessage(userId, 'jumped to ' + timeStr, true);
+    }
 
     fn();
     console.log('User ' + userId + ' updated session ' + users[userId].sessionId + ' with time ' + JSON.stringify(data.lastKnownTime) + ' and state ' + data.state + ' for epoch ' + JSON.stringify(data.lastKnownTimeUpdatedAt) + '.');
@@ -418,7 +498,7 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (!validateTyping(data.typing)) {
+    if (!validateBoolean(data.typing)) {
       fn({ errorMessage: 'Invalid typing.' });
       console.log('User ' + userId + ' attempted to set invalid presence ' + JSON.stringify(data.typing) + '.');
       return;
@@ -449,24 +529,10 @@ io.on('connection', function(socket) {
       return;
     }
 
-    var message = {
-      userId: userId,
-      body: data.body,
-      timestamp: new Date()
-    };
-    sessions[users[userId].sessionId].messages.push(message);
+    sendMessage(userId, data.body, false);
 
     fn();
-    console.log('User ' + userId + ' sent message ' + message.body + '.');
-
-    lodash.forEach(sessions[users[userId].sessionId].userIds, function(id) {
-      console.log('Sending message to user ' + id + '.');
-      users[id].socket.emit('sendMessage', {
-        userId: message.userId,
-        body: message.body,
-        timestamp: message.timestamp.getTime()
-      });
-    });
+    console.log('User ' + userId + ' sent message ' + data.body + '.');
   });
 
   socket.on('ping', function(data, fn) {
