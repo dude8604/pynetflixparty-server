@@ -465,9 +465,9 @@ io.on('connection', function(socket) {
 
     if (stateUpdated && timeUpdated) {
       if (data.state === 'playing') {
-        sendMessage(userId, 'jumped to ' + timeStr + ' and started playing the video', true);
+        sendMessage(userId, 'started playing the video at ' + timeStr, true);
       } else {
-        sendMessage(userId, 'jumped to ' + timeStr + ' and paused the video', true);
+        sendMessage(userId, 'paused the video at ' + timeStr, true);
       }
     } else if (stateUpdated) {
       if (data.state === 'playing') {
