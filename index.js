@@ -233,6 +233,12 @@ io.on('connection', function(socket) {
   };
 
   socket.on('reboot', function(data, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (!validateId(data.sessionId)) {
       fn({ errorMessage: 'Invalid session ID.' });
       console.log('User ' + userId + ' attempted to reboot invalid session ' + JSON.stringify(data.sessionId) + '.');
@@ -251,14 +257,10 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (data.messages === undefined) { // legacy clients don't have this attribute
-      data.messages = [];
-    } else {
-      if (!validateMessages(data.messages)) {
-        fn({ errorMessage: 'Invalid messages.' });
-        console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
-        return;
-      }
+    if (!validateMessages(data.messages)) {
+      fn({ errorMessage: 'Invalid messages.' });
+      console.log('User ' + userId + ' attempted to reboot session with invalid messages ' + JSON.stringify(data.messages) + '.');
+      return;
     }
 
     if (!validateState(data.state)) {
@@ -267,12 +269,10 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (data.userId !== undefined) { // legacy clients don't have this attribute
-      if (!validateId(data.userId)) {
-        fn({ errorMessage: 'Invalid userId.' });
-        console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid userId ' + JSON.stringify(data.userId) + '.');
-        return;
-      }
+    if (!validateId(data.userId)) {
+      fn({ errorMessage: 'Invalid userId.' });
+      console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid userId ' + JSON.stringify(data.userId) + '.');
+      return;
     }
 
     if (!validateVideoId(data.videoId)) {
@@ -281,17 +281,15 @@ io.on('connection', function(socket) {
       return;
     }
 
-    if (data.userId !== undefined) { // legacy clients don't have this attribute
-      if (users[userId].sessionId !== null) {
-        lodash.pull(sessions[users[userId].sessionId].userIds, userId);
-        if (sessions[users[userId].sessionId].userIds.length === 0) {
-          delete sessions[users[userId].sessionId];
-        }
+    if (users[userId].sessionId !== null) {
+      lodash.pull(sessions[users[userId].sessionId].userIds, userId);
+      if (sessions[users[userId].sessionId].userIds.length === 0) {
+        delete sessions[users[userId].sessionId];
       }
-      users[data.userId] = users[userId];
-      delete users[userId];
-      userId = data.userId;
     }
+    users[data.userId] = users[userId];
+    delete users[userId];
+    userId = data.userId;
 
     if (sessions.hasOwnProperty(data.sessionId)) {
       sessions[data.sessionId].userIds.push(userId);
@@ -325,6 +323,12 @@ io.on('connection', function(socket) {
   });
 
   socket.on('createSession', function(videoId, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (!validateVideoId(videoId)) {
       fn({ errorMessage: 'Invalid video ID.' });
       console.log('User ' + userId + ' attempted to create session with invalid video ' + JSON.stringify(videoId) + '.');
@@ -361,6 +365,12 @@ io.on('connection', function(socket) {
   });
 
   socket.on('joinSession', function(sessionId, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (!validateId(sessionId) || !sessions.hasOwnProperty(sessionId)) {
       fn({ errorMessage: 'Invalid session ID.' });
       console.log('User ' + userId + ' attempted to join nonexistent session ' + JSON.stringify(sessionId) + '.');
@@ -393,6 +403,12 @@ io.on('connection', function(socket) {
   });
 
   socket.on('leaveSession', function(_, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (users[userId].sessionId === null) {
       fn({ errorMessage: 'Not in a session.' });
       console.log('User ' + userId + ' attempted to leave a session, but the user was not in one.');
@@ -408,6 +424,12 @@ io.on('connection', function(socket) {
   });
 
   socket.on('updateSession', function(data, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (users[userId].sessionId === null) {
       fn({ errorMessage: 'Not in a session.' });
       console.log('User ' + userId + ' attempted to update a session, but the user was not in one.');
@@ -495,6 +517,12 @@ io.on('connection', function(socket) {
   });
 
   socket.on('typing', function(data, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (users[userId].sessionId === null) {
       fn({ errorMessage: 'Not in a session.' });
       console.log('User ' + userId + ' attempted to set presence, but the user was not in a session.');
@@ -520,6 +548,12 @@ io.on('connection', function(socket) {
   });
 
   socket.on('sendMessage', function(data, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (users[userId].sessionId === null) {
       fn({ errorMessage: 'Not in a session.' });
       console.log('User ' + userId + ' attempted to send a message, but the user was not in a session.');
@@ -538,20 +572,13 @@ io.on('connection', function(socket) {
     console.log('User ' + userId + ' sent message ' + data.body + '.');
   });
 
-  // legacy clients use the 'ping' event
-  // new clients use the identical event 'getServerTime' (below) instead,
-  // because apparently the new socket.io client reserves 'ping' as a
-  // special undocumented event...
-  socket.on('ping', function(data, fn) {
-    fn((new Date()).getTime());
-    if (typeof data === 'object' && data !== null && typeof data.version === 'string') {
-      console.log('User ' + userId + ' pinged with version ' + data.version + '.');
-    } else {
-      console.log('User ' + userId + ' pinged.');
-    }
-  });
-
   socket.on('getServerTime', function(data, fn) {
+    if (!users.hasOwnProperty(userId)) {
+      fn({ errorMessage: 'Disconnected.' });
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     fn((new Date()).getTime());
     if (typeof data === 'object' && data !== null && typeof data.version === 'string') {
       console.log('User ' + userId + ' pinged with version ' + data.version + '.');
@@ -561,6 +588,11 @@ io.on('connection', function(socket) {
   });
 
   socket.on('disconnect', function() {
+    if (!users.hasOwnProperty(userId)) {
+      console.log('The socket received a message after it was disconnected.');
+      return;
+    }
+
     if (users[userId].sessionId !== null) {
       sendMessage(userId, 'left', true);
     }
