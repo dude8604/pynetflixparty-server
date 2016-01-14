@@ -85,6 +85,18 @@ app.get('/', function(req, res) {
   res.send('OK');
 });
 
+// number of sessions
+app.get('/number-of-sessions', function(req, res) {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(String(Object.keys(sessions).length));
+});
+
+// number of users
+app.get('/number-of-users', function(req, res) {
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(String(Object.keys(users).length));
+});
+
 //////////////////////////////////////////////////////////////////////////
 // Websockets API                                                       //
 //////////////////////////////////////////////////////////////////////////
