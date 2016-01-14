@@ -49,6 +49,7 @@ app.use(function(req, res, next) {
 //   lastKnownTime: 123,                                                                    // milliseconds from the start of the video
 //   lastKnownTimeUpdatedAt: new Date(),                                                    // when we last received a time update
 //   messages: [{ userId: '3d16d961f67e9792', body: 'hello', timestamp: new Date() }, ...], // the chat messages for this session
+//   ownerId: '3d16d961f67e9792',                                                           // id of the session owner (if any)
 //   state: 'playing' | 'paused',                                                           // whether the video is playing or paused
 //   userIds: ['3d16d961f67e9792', ...],                                                    // ids of the users in the session
 //   videoId: 123                                                                           // Netflix id the video
@@ -275,6 +276,17 @@ io.on('connection', function(socket) {
       return;
     }
 
+    // legacy clients (<= 1.2.5) don't pass ownerId
+    if (data.ownerId === undefined) {
+      data.ownerId = null;
+    }
+
+    if (data.ownerId !== null && !validateId(data.ownerId)) {
+      fn({ errorMessage: 'Invalid ownerId.' });
+      console.log('User ' + userId + ' attempted to reboot invalid ownerId ' + JSON.stringify(data.ownerId) + '.');
+      return;
+    }
+
     if (!validateState(data.state)) {
       fn({ errorMessage: 'Invalid state.' });
       console.log('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid state ' + JSON.stringify(data.state) + '.');
@@ -318,6 +330,7 @@ io.on('connection', function(socket) {
           isSystemMessage: message.isSystemMessage,
           timestamp: new Date(message.timestamp)
         }; }),
+        ownerId: data.ownerId,
         state: data.state,
         videoId: data.videoId,
         userIds: [userId]
@@ -334,16 +347,30 @@ io.on('connection', function(socket) {
     });
   });
 
-  socket.on('createSession', function(videoId, fn) {
+  socket.on('createSession', function(data, fn) {
+    // legacy clients (<= 1.2.5) just send videoId
+    if (typeof data !== 'object') {
+      data = {
+        controlLock: false,
+        videoId: data
+      };
+    }
+
     if (!users.hasOwnProperty(userId)) {
       fn({ errorMessage: 'Disconnected.' });
       console.log('The socket received a message after it was disconnected.');
       return;
     }
 
-    if (!validateVideoId(videoId)) {
+    if (!validateBoolean(data.controlLock)) {
+      fn({ errorMessage: 'Invalid controlLock.' });
+      console.log('User ' + userId + ' attempted to create session with invalid controlLock ' + JSON.stringify(data.controlLock) + '.');
+      return;
+    }
+
+    if (!validateVideoId(data.videoId)) {
       fn({ errorMessage: 'Invalid video ID.' });
-      console.log('User ' + userId + ' attempted to create session with invalid video ' + JSON.stringify(videoId) + '.');
+      console.log('User ' + userId + ' attempted to create session with invalid video ' + JSON.stringify(data.videoId) + '.');
       return;
     }
 
@@ -354,9 +381,10 @@ io.on('connection', function(socket) {
       lastKnownTime: 0,
       lastKnownTimeUpdatedAt: now,
       messages: [],
+      ownerId: data.controlLock ? userId : null,
       state: 'paused',
       userIds: [userId],
-      videoId: videoId
+      videoId: data.videoId
     };
     sessions[session.id] = session;
 
@@ -372,8 +400,12 @@ io.on('connection', function(socket) {
       sessionId: users[userId].sessionId,
       state: sessions[users[userId].sessionId].state
     });
-    sendMessage(userId, 'created the session', true);
-    console.log('User ' + userId + ' created session ' + users[userId].sessionId + ' with video ' + JSON.stringify(videoId) + '.');
+    if (data.controlLock) {
+      sendMessage(userId, 'created the session with exclusive control', true);
+    } else {
+      sendMessage(userId, 'created the session', true);
+    }
+    console.log('User ' + userId + ' created session ' + users[userId].sessionId + ' with video ' + JSON.stringify(data.videoId) + ' and controlLock ' + JSON.stringify(data.controlLock) + '.');
   });
 
   socket.on('joinSession', function(sessionId, fn) {
@@ -409,6 +441,7 @@ io.on('connection', function(socket) {
         timestamp: message.timestamp.getTime(),
         userId: message.userId
       }; }),
+      ownerId: sessions[sessionId].ownerId,
       state: sessions[sessionId].state
     });
     console.log('User ' + userId + ' joined session ' + sessionId + '.');
@@ -463,6 +496,12 @@ io.on('connection', function(socket) {
     if (!validateState(data.state)) {
       fn({ errorMessage: 'Invalid state.' });
       console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid state ' + JSON.stringify(data.state) + '.');
+      return;
+    }
+
+    if (sessions[users[userId].sessionId].ownerId !== null && sessions[users[userId].sessionId].ownerId !== userId) {
+      fn({ errorMessage: 'Session locked.' });
+      console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' but the session is locked by ' + sessions[users[userId].sessionId].ownerId + '.');
       return;
     }
 
