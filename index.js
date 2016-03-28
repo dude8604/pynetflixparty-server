@@ -2,10 +2,6 @@
 // Configuration                                                        //
 //////////////////////////////////////////////////////////////////////////
 
-// we don't use HTTPS (WSS) here because CloudFlare (our CDN) only supports
-// websockets for "enterprise" customers. so for now we use HTTP (WS) and
-// bypass CloudFlare.
-
 // express
 var express = require('express');
 var app = express();
