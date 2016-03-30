@@ -221,12 +221,13 @@ io.on('connection', function(socket) {
     }
   };
 
-  var sendMessage = function(fromUserId, body, isSystemMessage) {
+  // precondition: user userId is in a session
+  var sendMessage = function(body, isSystemMessage) {
     var message = {
       body: body,
       isSystemMessage: isSystemMessage,
       timestamp: new Date(),
-      userId: fromUserId
+      userId: userId
     };
     sessions[users[userId].sessionId].messages.push(message);
 
@@ -272,11 +273,6 @@ io.on('connection', function(socket) {
       return;
     }
 
-    // legacy clients (<= 1.2.5) don't pass ownerId
-    if (data.ownerId === undefined) {
-      data.ownerId = null;
-    }
-
     if (data.ownerId !== null && !validateId(data.ownerId)) {
       fn({ errorMessage: 'Invalid ownerId.' });
       console.log('User ' + userId + ' attempted to reboot invalid ownerId ' + JSON.stringify(data.ownerId) + '.');
@@ -307,9 +303,11 @@ io.on('connection', function(socket) {
         delete sessions[users[userId].sessionId];
       }
     }
-    users[data.userId] = users[userId];
-    delete users[userId];
-    userId = data.userId;
+    if (userId !== data.userId) {
+      users[data.userId] = users[userId];
+      delete users[userId];
+      userId = data.userId;
+    }
 
     if (sessions.hasOwnProperty(data.sessionId)) {
       sessions[data.sessionId].userIds.push(userId);
@@ -344,14 +342,6 @@ io.on('connection', function(socket) {
   });
 
   socket.on('createSession', function(data, fn) {
-    // legacy clients (<= 1.2.5) just send videoId
-    if (typeof data !== 'object') {
-      data = {
-        controlLock: false,
-        videoId: data
-      };
-    }
-
     if (!users.hasOwnProperty(userId)) {
       fn({ errorMessage: 'Disconnected.' });
       console.log('The socket received a message after it was disconnected.');
@@ -397,9 +387,9 @@ io.on('connection', function(socket) {
       state: sessions[users[userId].sessionId].state
     });
     if (data.controlLock) {
-      sendMessage(userId, 'created the session with exclusive control', true);
+      sendMessage('created the session with exclusive control', true);
     } else {
-      sendMessage(userId, 'created the session', true);
+      sendMessage('created the session', true);
     }
     console.log('User ' + userId + ' created session ' + users[userId].sessionId + ' with video ' + JSON.stringify(data.videoId) + ' and controlLock ' + JSON.stringify(data.controlLock) + '.');
   });
@@ -425,7 +415,7 @@ io.on('connection', function(socket) {
 
     users[userId].sessionId = sessionId;
     sessions[sessionId].userIds.push(userId);
-    sendMessage(userId, 'joined', true);
+    sendMessage('joined', true);
 
     fn({
       videoId: sessions[sessionId].videoId,
@@ -456,7 +446,7 @@ io.on('connection', function(socket) {
       return;
     }
 
-    sendMessage(userId, 'left', true);
+    sendMessage('left', true);
     var sessionId = users[userId].sessionId;
     leaveSession();
 
@@ -534,18 +524,18 @@ io.on('connection', function(socket) {
 
     if (stateUpdated && timeUpdated) {
       if (data.state === 'playing') {
-        sendMessage(userId, 'started playing the video at ' + timeStr, true);
+        sendMessage('started playing the video at ' + timeStr, true);
       } else {
-        sendMessage(userId, 'paused the video at ' + timeStr, true);
+        sendMessage('paused the video at ' + timeStr, true);
       }
     } else if (stateUpdated) {
       if (data.state === 'playing') {
-        sendMessage(userId, 'started playing the video', true);
+        sendMessage('started playing the video', true);
       } else {
-        sendMessage(userId, 'paused the video', true);
+        sendMessage('paused the video', true);
       }
     } else if (timeUpdated) {
-      sendMessage(userId, 'jumped to ' + timeStr, true);
+      sendMessage('jumped to ' + timeStr, true);
     }
 
     fn();
@@ -613,7 +603,7 @@ io.on('connection', function(socket) {
       return;
     }
 
-    sendMessage(userId, data.body, false);
+    sendMessage(data.body, false);
 
     fn();
     console.log('User ' + userId + ' sent message ' + data.body + '.');
@@ -641,7 +631,7 @@ io.on('connection', function(socket) {
     }
 
     if (users[userId].sessionId !== null) {
-      sendMessage(userId, 'left', true);
+      sendMessage('left', true);
     }
     leaveSession();
     delete users[userId];
