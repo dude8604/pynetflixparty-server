@@ -185,6 +185,8 @@ io.on('connection', function(socket) {
   socket.emit('userId', userId);
   console.log('User ' + userId + ' connected.');
 
+  // precondition: sessionId is the id of a session
+  // precondition: notToThisUserId is the id of a user, or null
   var broadcastPresence = function(sessionId, notToThisUserId) {
     var anyoneTyping = false;
     for (var i = 0; i < sessions[sessionId].userIds.length; i += 1) {
@@ -204,24 +206,9 @@ io.on('connection', function(socket) {
     });
   };
 
-  var leaveSession = function() {
-    if (users[userId].sessionId === null) {
-      return;
-    }
-
-    var sessionId = users[userId].sessionId;
-    lodash.pull(sessions[sessionId].userIds, userId);
-    users[userId].sessionId = null;
-
-    if (sessions[sessionId].userIds.length === 0) {
-      delete sessions[sessionId];
-      console.log('Session ' + sessionId + ' was deleted because there were no more users in it.');
-    } else {
-      broadcastPresence(sessionId, null);
-    }
-  };
-
   // precondition: user userId is in a session
+  // precondition: body is a string
+  // precondition: isSystemMessage is a boolean
   var sendMessage = function(body, isSystemMessage) {
     var message = {
       body: body,
@@ -240,6 +227,22 @@ io.on('connection', function(socket) {
         userId: message.userId
       });
     });
+  };
+
+  // precondition: user userId is in a session
+  var leaveSession = function() {
+    sendMessage('left', true);
+
+    var sessionId = users[userId].sessionId;
+    lodash.pull(sessions[sessionId].userIds, userId);
+    users[userId].sessionId = null;
+
+    if (sessions[sessionId].userIds.length === 0) {
+      delete sessions[sessionId];
+      console.log('Session ' + sessionId + ' was deleted because there were no more users in it.');
+    } else {
+      broadcastPresence(sessionId, null);
+    }
   };
 
   socket.on('reboot', function(data, fn) {
@@ -446,7 +449,6 @@ io.on('connection', function(socket) {
       return;
     }
 
-    sendMessage('left', true);
     var sessionId = users[userId].sessionId;
     leaveSession();
 
@@ -631,11 +633,14 @@ io.on('connection', function(socket) {
     }
 
     if (users[userId].sessionId !== null) {
-      sendMessage('left', true);
+      leaveSession();
     }
-    leaveSession();
     delete users[userId];
     console.log('User ' + userId + ' disconnected.');
+  });
+
+  socket.on('error', function(e) {
+    console.error(e);
   });
 });
 
