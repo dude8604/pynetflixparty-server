@@ -363,6 +363,8 @@ io.on('connection', function(socket) {
       return;
     }
 
+    d
+
     users[userId].sessionId = makeId();
     var now = new Date();
     var session = {
