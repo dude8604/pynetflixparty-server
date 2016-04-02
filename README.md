@@ -2,6 +2,9 @@
 
 This is a Python port of the server for Stephan Boyers' Netflix Party Chrome extension.  I am only porting the server part - the other parts make more sense as a Chrome extension.  You will have to modify the Chrome extension part so it points to your server if you want to use this.
 
+Requires:
+* pynetflixparty-server (can install with pip)
+
 ----------------------
 
 Netflix Party is a Chrome extension for watching Netflix remotely with friends, e.g., for movie nights with that long-distance special someone. It synchronizes video playback and adds group chat.
