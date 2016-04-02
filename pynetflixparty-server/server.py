@@ -183,7 +183,11 @@ def onConnection(socket):
 	# precondition: body is a string
 	# precondition: isSystemMessage is a boolean
 	def sendMessage(body, isSystemMessage):
-		message = (body = body, isSystemMessage = isSystemMessage, timestamp = datetime.now(), userId = userId)
+		message = dict(body = body, 
+					isSystemMessage = isSystemMessage, 
+					timestamp = datetime.now(), 
+					userId = userId
+					)
 		sessions[users[userId].sessionId].messages.push(message)
 		
 		for userId in sessions[users[userId].sessionId].userIds:
@@ -210,52 +214,52 @@ def onConnection(socket):
 	@socket.on('reboot')
 	def onReboot(data, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.'))
+			fn(dict( errorMessage = 'Disconnected.'))
 			return
 		
 		if (not validateId(data.sessionId)):
-			fn(( errorMessage: 'Invalid session ID.' ))
-			logger.info('User ' + userId + ' attempted to reboot invalid session ' + json.dump(data.sessionId) + '.'))
+			fn(dict( errorMessage = 'Invalid session ID.' ))
+			logger.info('User ' + userId + ' attempted to reboot invalid session ' + json.dump(data.sessionId) + '.')
 			return
 		
 		if (not validateLastKnownTime(data.lastKnownTime)):
-			fn(( errorMessage: 'Invalid lastKnownTime.' ))
+			fn(dict( errorMessage = 'Invalid lastKnownTime.' ))
 			logger.info('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid lastKnownTime ' + json.dump(data.lastKnownTime) + '.')
 			return
 	
 		if (not valideTimestamp(data.lastKnownTimeUpdatedAt)):
-			fn(( errorMessage: 'Invalid lastKnownTimeUpdatedAt.' ))
+			fn(dict( errorMessage = 'Invalid lastKnownTimeUpdatedAt.' ))
 			logger.info('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid lastKnownTimeUpdatedAt ' + json.dump(data.lastKnownTimeUpdatedAt) + '.')
 			return
 		
 		if (not validateMessages(data.messages)):
-			fn(( errorMessage: 'Invalid messages.' ))
+			fn(dict( errorMessage = 'Invalid messages.' ))
 			logger.info('User ' + userId + ' attempted to reboot session with invalid messages ' + json.dump(data.messages) + '.')
 			return
 		
 		if (not data.ownerId == None and not validateId(data.ownerId)):
-			fn(( errorMessage: 'Invalid ownerId.' ))
+			fn(dict( errorMessage = 'Invalid ownerId.' ))
 			logger.info('User ' + userId + ' attempted to reboot invalid ownerId ' + json.dump(data.ownerId) + '.')
 			return
 		
 		if (not validateState(data.state)):
-			fn(( errorMessage: 'Invalid state.' ))
+			fn(dict( errorMessage = 'Invalid state.' ))
 			logger.info('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid state ' + json.dump(data.state) + '.')
 			return
 		
 		if (not validateId(data.userId)):
-			fn(( errorMessage: 'Invalid userId.' ))
+			fn(dict( errorMessage = 'Invalid userId.' ))
 			logger.info('User ' + userId + ' attempted to reboot session ' + data.sessionId + ' with invalid userId ' + json.dump(data.userId) + '.')
 			return
 		
 		if (not validateVideoId(data.videoId)):
-			fn(( errorMessage: 'Invalid video ID.' ))
+			fn(dict( errorMessage = 'Invalid video ID.' ))
 			logger.info('User ' + userId + ' attempted to reboot session with invalid video ' + json.dump(data.videoId) + '.')
 			return
 		
 		if (not users[userId].sessionId == None):
 			sessions[users[userId].sessionId].userIds.remove(userId)
-			if (sessions[users[userId].sessionId].userIds.length === 0):
+			if (sessions[users[userId].sessionId].userIds.length == 0):
 				del sessions[users[userId].sessionId]
 		
 		if (not userId == data.userId):
@@ -268,56 +272,60 @@ def onConnection(socket):
 			users[userId].sessionId = data.sessionId
 			logger.info('User ' + userId + ' reconnected and rejoined session ' + users[userId].sessionId + '.')
 		else:
-			session = (
-					id: data.sessionId,
-					lastKnownTime: data.lastKnownTime,
-					lastKnownTimeUpdatedAt: new Date(data.lastKnownTimeUpdatedAt),
-					messages: map(data.messages, lambda (message) : return (
-																		userId: message.userId,
-																		body: message.body,
-																		isSystemMessage: message.isSystemMessage,
-																		timestamp: datetime.fromtimestamp(message.timestamp)
-																		)
-					),
-					ownerId: data.ownerId,
-					state: data.state,
-					videoId: data.videoId,userIds: [userId]
+			tempMessages = []
+			for msg in data.messages:	
+				tempMessages.append(dict(
+									userId= message.userId,
+									body= message.body,isSystemMessage= message.isSystemMessage,
+									timestamp= datetime.fromtimestamp(message.timestamp)
+									)
+								)		
+			session = dict(
+					id = data.sessionId,
+					lastKnownTime = data.lastKnownTime,
+					lastKnownTimeUpdatedAt = datetime.fromtimestamp(data.lastKnownTimeUpdatedAt),
+
+					messages = tempMessages,
+					ownerId = data.ownerId,
+					state = data.state,
+					videoId = data.videoId,
+					userIds = [userId]
 					)
 			sessions[session.id] = session
 			users[userId].sessionId = data.sessionId
 			logger.info('User ' + userId + ' rebooted session ' + users[userId].sessionId + ' with video ' + json.dump(data.videoId) + ', time ' + json.dump(data.lastKnownTime) + ', and state ' + data.state + ' for epoch ' + json.dump(data.lastKnownTimeUpdatedAt) + '.')
 			
-	fn((
-		lastKnownTime: sessions[data.sessionId].lastKnownTime,
-		lastKnownTimeUpdatedAt: toTimestampSeconds(sessions[data.sessionId].lastKnownTimeUpdatedAt,
-		state: sessions[data.sessionId].state
-		))
-	  
+	fn(dict(
+		lastKnownTime= sessions[data.sessionId].lastKnownTime,
+		lastKnownTimeUpdatedAt= toTimestampSeconds(sessions[data.sessionId].lastKnownTimeUpdatedAt,
+		state= sessions[data.sessionId].state
+		)))
+	
 	@socket.on('createSession')
 	def onCreateSession(data, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			logger.log('The socket received a message after it was disconnected.')
 			return
 		
 		if (not validateBoolean(data.controlLock)):
-			fn(( errorMessage: 'Invalid controlLock.' })
+			fn(dict( errorMessage = 'Invalid controlLock.' ))
 			logger.info('User ' + userId + ' attempted to create session with invalid controlLock ' + json.dump(data.controlLock) + '.')
 			return
 		
 		if (not validateVideoId(data.videoId)):
-			fn(( errorMessage: 'Invalid video ID.' ))
+			fn(dict( errorMessage = 'Invalid video ID.' ))
 			logger.info('User ' + userId + ' attempted to create session with invalid video ' + json.dump(data.videoId) + '.')
 			return
 		
 		users[userId].sessionId = makeId()
-		now = new Date()
+		now = datetime.now()
 		
 		theSession = session(users[userId].sessionId, 
 							0, 
 							now, 
 							[], 
-							data.controlLock ? userId : null, 
+							userId if data.controlLock else null, 
 							'paused', 
 							[userId], 
 							data.videoId
@@ -325,20 +333,24 @@ def onConnection(socket):
 		
 		sessions[session.id] = theSession
 		
-		fn((
-		lastKnownTime: sessions[users[userId].sessionId].lastKnownTime,
-		lastKnownTimeUpdatedAt: toTimestampSeconds(sessions[users[userId].sessionId].lastKnownTimeUpdatedAt),
-		messages: map(sessions[users[userId].sessionId].messages, lambda (message) : return (
-																							body: message.body,
-																							isSystemMessage: message.isSystemMessage,
-																							timestamp: toTimestampSeconds(message.timestamp),
-																							userId: message.userId
-																							)
-					),
-					sessionId: users[userId].sessionId,
-					state: sessions[users[userId].sessionId].state
-					)
-				)
+		tempMessages = []
+		for msg in sessions[users[userId].sessionId].messages:
+			tempMessages.append(dict(body = message.body,
+									isSystemMessage = message.isSystemMessage,
+									timestamp = toTimestampSeconds(message.timestamp),
+									userId = message.userId
+									
+									)
+								)
+		
+		fn(dict(
+			lastKnownTime = sessions[users[userId].sessionId].lastKnownTime,
+			lastKnownTimeUpdatedAt = toTimestampSeconds(sessions[users[userId].sessionId].lastKnownTimeUpdatedAt),
+			messages = tempMessages,
+			sessionId = users[userId].sessionId,
+			state = sessions[users[userId].sessionId].state
+			)
+		)
 					
 		if (data.controlLock):
 			sendMessage('created the session with exclusive control', true)
@@ -350,17 +362,17 @@ def onConnection(socket):
 	@socket.on('joinSession')
 	def onJoinSession(sessionId, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			logger.info('The socket received a message after it was disconnected.')
 			return
 		
 		if (not validateId(sessionId) or not hasattr(sessions,sessionId)):
-			fn(( errorMessage: 'Invalid session ID.' ))
+			fn(dict( errorMessage = 'Invalid session ID.' ))
 			logger.info('User ' + userId + ' attempted to join nonexistent session ' + json.dump(sessionId) + '.')
 			return
 		
 		if (not users[userId].sessionId == None):
-			fn(( errorMessage: 'Already in a session.' ))
+			fn(dict( errorMessage = 'Already in a session.' ))
 			logger.info('User ' + userId + ' attempted to join session ' + sessionId + ', but the user is already in session ' + users[userId].sessionId + '.')
 			return
 		
@@ -368,32 +380,35 @@ def onConnection(socket):
 		sessions[sessionId].userIds.push(userId)
 		sendMessage('joined', true)
 		
-		fn((
-		videoId: sessions[sessionId].videoId,
-		lastKnownTime: sessions[sessionId].lastKnownTime,
-		lastKnownTimeUpdatedAt: sessions[sessionId].lastKnownTimeUpdatedAt.getTime(),
-		messages: map(sessions[sessionId].messages, lambda (message) : return (
-																			body: message.body,
-																			isSystemMessage: message.isSystemMessage,
-																			timestamp: toTimestampSeconds(message.timestamp,
-																			userId: message.userId
-																			)
-		),
-		ownerId: sessions[sessionId].ownerId,
-		state: sessions[sessionId].state
-		)
+		tempMessages = []
+		for msg in sessions[sessionId].messages:
+			tempMessages.append(dict(
+									body = message.body,
+									isSystemMessage = message.isSystemMessage,
+									timestamp = toTimestampSeconds(message.timestamp),
+									userId = message.userId)
+							)
+		
+		fn(dict(
+		videoId = sessions[sessionId].videoId,
+		lastKnownTime = sessions[sessionId].lastKnownTime,
+		lastKnownTimeUpdatedAt = sessions[sessionId].lastKnownTimeUpdatedAt.getTime(),
+		messages = tempMessages,
+		ownerId = sessions[sessionId].ownerId,
+		state = sessions[sessionId].state
+		))
 		
 		logger.info('User ' + userId + ' joined session ' + sessionId + '.')
 		
 	@socket.on('leaveSession')
-	def onLeaveSession(None, fn):
+	def onLeaveSession(_, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			console.log('The socket received a message after it was disconnected.')
 			return
 		
-		if (users[userId].sessionId === None):
-			fn(( errorMessage: 'Not in a session.' ))
+		if (users[userId].sessionId == None):
+			fn(dict( errorMessage = 'Not in a session.' ))
 			console.log('User ' + userId + ' attempted to leave a session, but the user was not in one.')
 			return
 		
@@ -406,43 +421,43 @@ def onConnection(socket):
 	@socket.on('updateSession')
 	def onUpdateSession(data, fn):
 		if (not userId in  users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			console.log('The socket received a message after it was disconnected.')
 			return
 		
 		if (users[userId].sessionId == None):
-			fn(( errorMessage: 'Not in a session.' ))
+			fn(dict( errorMessage = 'Not in a session.' ))
 			console.log('User ' + userId + ' attempted to update a session, but the user was not in one.')
 			return
 		
 		if (not validateLastKnownTime(data.lastKnownTime)):
-			fn(( errorMessage: 'Invalid lastKnownTime.' ))
+			fn(dict( errorMessage = 'Invalid lastKnownTime.' ))
 			console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid lastKnownTime ' + JSON.stringify(data.lastKnownTime) + '.')
 			return
 		
 		if (not validateTimestamp(data.lastKnownTimeUpdatedAt)):
-			fn(( errorMessage: 'Invalid lastKnownTimeUpdatedAt.' ))
+			fn(dict( errorMessage = 'Invalid lastKnownTimeUpdatedAt.' ))
 			console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid lastKnownTimeUpdatedAt ' + JSON.stringify(data.lastKnownTimeUpdatedAt) + '.')
 			return
 		
 		if (not validateState(data.state)):
-			fn(( errorMessage: 'Invalid state.' ))
+			fn(dict( errorMessage = 'Invalid state.' ))
 			console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid state ' + JSON.stringify(data.state) + '.')
 			return
 		
 		if (not sessions[users[userId].sessionId].ownerId == None and not sessions[users[userId].sessionId].ownerId == userId):
-			fn(( errorMessage: 'Session locked.' ))
+			fn(dict( errorMessage = 'Session locked.' ))
 			console.log('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' but the session is locked by ' + sessions[users[userId].sessionId].ownerId + '.')
 			return
 		
 		now = toTimestampSeconds(datetime.now())
-		oldPredictedTime = sessions[users[userId].sessionId].lastKnownTime + 
-		(0 if sessions[users[userId].sessionId].state === 'paused' else (
+		oldPredictedTime = sessions[users[userId].sessionId].lastKnownTime + \
+		(0 if sessions[users[userId].sessionId].state == 'paused' else (
 																	now - toTimestampSeconds(sessions[users[userId].sessionId].lastKnownTimeUpdatedAt)
 																	))
 		
-		newPredictedTime = data.lastKnownTime + 
-		(0 if data.state === 'paused' else (now - data.lastKnownTimeUpdatedAt))
+		newPredictedTime = data.lastKnownTime + \
+		(0 if data.state == 'paused' else (now - data.lastKnownTimeUpdatedAt))
 		
 		stateUpdated = not sessions[users[userId].sessionId].state == data.state
 		timeUpdated = Math.abs(newPredictedTime - oldPredictedTime) > 2500
@@ -461,14 +476,14 @@ def onConnection(socket):
 			timeStr = String(minutes) + ':' + padIntegerWithZeros(seconds, 2)
 			
 		sessions[users[userId].sessionId].lastKnownTime = data.lastKnownTime
-		sessions[users[userId].sessionId].lastKnownTimeUpdatedAt = new Date(data.lastKnownTimeUpdatedAt)
+		sessions[users[userId].sessionId].lastKnownTimeUpdatedAt = timedate.fromtimestamp(data.lastKnownTimeUpdatedAt)
 		sessions[users[userId].sessionId].state = data.state
 		
 		if (stateUpdated and timeUpdated):
 			if (data.state == 'playing'):
 				sendMessage('started playing the video at ' + timeStr, True)
 			else:
-				sendMessage('paused the video at ' + timeStr, True
+				sendMessage('paused the video at ' + timeStr, True)
 		elif (stateUpdated):
 			if (data.state == 'playing'):
 				sendMessage('started playing the video', True)
@@ -483,26 +498,26 @@ def onConnection(socket):
 		for id in sessions[users[userId].sessionId].userIds:
 			logger.info('Sending update to user ' + id + '.')
 			if (not id == userId):
-				users[userId].socket.emit('update', (
-													lastKnownTime: sessions[users[userId].sessionId].lastKnownTime,
-													lastKnownTimeUpdatedAt: sessions[users[userId].sessionId].lastKnownTimeUpdatedAt.getTime(),
-													state: sessions[users[userId].sessionId].state)
+				users[userId].socket.emit('update', dict(
+													lastKnownTime = sessions[users[userId].sessionId].lastKnownTime,
+													lastKnownTimeUpdatedAt = sessions[users[userId].sessionId].lastKnownTimeUpdatedAt.getTime(),
+													state = sessions[users[userId].sessionId].state)
 										)
 
 	@socket.on('typing')
 	def onTyping(data, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			console.log('The socket received a message after it was disconnected.')
 			return
 		
 		if (users[userId].sessionId == None):
-			fn(( errorMessage: 'Not in a session.' ))
+			fn(dict( errorMessage = 'Not in a session.' ))
 			console.log('User ' + userId + ' attempted to set presence, but the user was not in a session.')
 			return
 		
 		if (not validateBoolean(data.typing)):
-			fn(( errorMessage: 'Invalid typing.' ))
+			fn(dict( errorMessage = 'Invalid typing.' ))
 			console.log('User ' + userId + ' attempted to set invalid presence ' + JSON.stringify(data.typing) + '.')
 			return
 		
@@ -520,17 +535,17 @@ def onConnection(socket):
 	@socket.on('sendMessage')
 	def onSendMessage(data, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			console.log('The socket received a message after it was disconnected.')
 			return
 		
 		if (users[userId].sessionId == None):
-			fn(( errorMessage: 'Not in a session.' ))
+			fn(dict( errorMessage = 'Not in a session.' ))
 			console.log('User ' + userId + ' attempted to send a message, but the user was not in a session.')
 			return
 		
 		if (not validateMessageBody(data.body)):
-			fn(( errorMessage: 'Invalid message body.' ))
+			fn(dict( errorMessage = 'Invalid message body.' ))
 			console.log('User ' + userId + ' attempted to send an invalid message ' + JSON.stringify(data.body) + '.')
 			return
 		
@@ -541,12 +556,12 @@ def onConnection(socket):
 	@socket.on('getServerTime')
 	def onGetServerTime(data, fn):
 		if (not userId in users):
-			fn(( errorMessage: 'Disconnected.' ))
+			fn(dict( errorMessage = 'Disconnected.' ))
 			console.log('The socket received a message after it was disconnected.')
 			return
 		
 		fn(toTimestampSeconds(datetime.now()))
-		if (data != None and isinstance(data.version, basestring):
+		if (data != None and isinstance(data.version, basestring)):
 			console.log('User ' + userId + ' pinged with version ' + data.version + '.')
 		else:
 			console.log('User ' + userId + ' pinged.')
