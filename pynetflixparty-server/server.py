@@ -79,7 +79,7 @@ class user:
 sessions = dict()
 users = dict()
 
-io = socketio.Server()
+io = socketio.Server(logger=True)
 
 # generate a random ID with 64 bits of entropy
 
@@ -97,8 +97,8 @@ def isNumber(number):
 	return isinstance(number, (int, long, float, complex)) and not isinstance(number, bool)
 
 
-def toTimestampSeconds(dt):
-	return (dt - datetime(1970, 1, 1)).total_seconds()
+def toTimestampMilliseconds(dt):
+	return (dt - datetime(1970, 1, 1)).total_seconds() * 1000
 
 
 #validation functions
@@ -125,13 +125,6 @@ def validateMessages(messages):
 		return False
 
 	for msg in messages:
-# 		if i in messages:
-# 		i = int(i)
-# 		if math.isnan(i):
-# 			return False
-# 
-# 		if (not isNumber(i) or i % 1 != 0 or i < 0 or i >= len(messages)):
-# 			return False
 
 		if (not isclass(msg) or msg == None):
 			return False
@@ -198,7 +191,7 @@ def broadcastPresence(sessionId, notToThisUserId):
 def sendMessage(body, isSystemMessage, userId):
 	message = dict(body = body, 
 				isSystemMessage = isSystemMessage, 
-				timestamp = toTimestampSeconds(datetime.now()), 
+				timestamp = toTimestampMilliseconds(datetime.now()), 
 				userId = userId
 				)
 	sessions[users[userId].sessionId].messages.append(message)
@@ -285,14 +278,13 @@ def onReboot(sid, data):
 								userId= msg['userId'],
 								body= msg['body'],
 								isSystemMessage= msg['isSystemMessage'],
-								timestamp= datetime.fromtimestamp(msg['timestamp'])
+								timestamp= msg['timestamp']
 								)
 							)		
 		session = dict(
 				id = data['sessionId'],
 				lastKnownTime = data['lastKnownTime'],
-				lastKnownTimeUpdatedAt = datetime.fromtimestamp(data['lastKnownTimeUpdatedAt']),
-	
+				lastKnownTimeUpdatedAt = data['lastKnownTimeUpdatedAt'],
 				messages = tempMessages,
 				ownerId = data['ownerId'],
 				state = data['state'],
@@ -305,7 +297,7 @@ def onReboot(sid, data):
 		
 	return dict(
 		lastKnownTime= sessions[data['sessionId']].lastKnownTime,
-		lastKnownTimeUpdatedAt= toTimestampSeconds(sessions[data['sessionId']].lastKnownTimeUpdatedAt),
+		lastKnownTimeUpdatedAt= sessions[data['sessionId']].lastKnownTimeUpdatedAt,
 		state= sessions[data['sessionId']].state
 		)
 	
@@ -326,7 +318,7 @@ def onCreateSession(sid, data):
 		return dict( errorMessage = 'Invalid video ID.' )
 	
 	users[userId].sessionId = makeId()
-	now = datetime.now()
+	now = toTimestampMilliseconds(datetime.now())
 	
 	theSession = session(users[userId].sessionId, 
 						0, 
@@ -344,7 +336,7 @@ def onCreateSession(sid, data):
 	for msg in sessions[users[userId].sessionId].messages:
 		tempMessages.append(dict(body = msg['body'],
 								isSystemMessage = msg['isSystemMessage'],
-								timestamp = toTimestampSeconds(msg['timestamp']),
+								timestamp = msg['timestamp'],
 								userId = msg['userId']
 								
 								)
@@ -359,19 +351,17 @@ def onCreateSession(sid, data):
 	
 	return dict(
 		lastKnownTime = sessions[users[userId].sessionId].lastKnownTime,
-		lastKnownTimeUpdatedAt = toTimestampSeconds(sessions[users[userId].sessionId].lastKnownTimeUpdatedAt),
+		lastKnownTimeUpdatedAt = sessions[users[userId].sessionId].lastKnownTimeUpdatedAt,
 		messages = tempMessages,
 		sessionId = users[userId].sessionId,
 		state = sessions[users[userId].sessionId].state
 		)
 	
-	return tuple()
-	
 
 @io.on('joinSession')
 def onJoinSession(sid, data):
 	userId = sid
-	sessionId = data['sessionId']
+	sessionId = data
 	if (not userId in users):
 		writeToLog('The socket received a message after it was disconnected.')
 		return dict( errorMessage = 'Disconnected.' )
@@ -385,7 +375,7 @@ def onJoinSession(sid, data):
 		return dict( errorMessage = 'Already in a session.' )
 	
 	users[userId].sessionId = sessionId
-	sessions[sessionId].userIds.push(userId)
+	sessions[sessionId].userIds.append(userId)
 	sendMessage('joined', True, userId)
 	
 	tempMessages = []
@@ -393,8 +383,9 @@ def onJoinSession(sid, data):
 		tempMessages.append(dict(
 								body = msg['body'],
 								isSystemMessage = msg['isSystemMessage'],
-								timestamp = toTimestampSeconds(msg['timestamp']),
-								userId = msg['userId'])
+								timestamp = msg['timestamp'],
+								userId = msg['userId']
+								)
 						)
 	
 	writeToLog('User ' + userId + ' joined session ' + sessionId + '.')	
@@ -402,7 +393,7 @@ def onJoinSession(sid, data):
 	return dict(
 	videoId = sessions[sessionId].videoId,
 	lastKnownTime = sessions[sessionId].lastKnownTime,
-	lastKnownTimeUpdatedAt = sessions[sessionId].lastKnownTimeUpdatedAt.getTime(),
+	lastKnownTimeUpdatedAt = sessions[sessionId].lastKnownTimeUpdatedAt,
 	messages = tempMessages,
 	ownerId = sessions[sessionId].ownerId,
 	state = sessions[sessionId].state
@@ -450,16 +441,16 @@ def onUpdateSession(sid, data):
 		writeToLog('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' with invalid state ' + json.dumps(data['state']) + '.')
 		return dict( errorMessage = 'Invalid state.' )
 	
-	if (not sessions[users[userId].sessionId].ownerId == None and not sessions[users[userId].sessionId].ownerId == userId):
+	if (sessions[users[userId].sessionId].ownerId != None and sessions[users[userId].sessionId].ownerId != userId):
 		writeToLog('User ' + userId + ' attempted to update session ' + users[userId].sessionId + ' but the session is locked by ' + sessions[users[userId].sessionId].ownerId + '.')
 		return dict( errorMessage = 'Session locked.' )
 	
 	intLastKnownTimeUpdatedAt = int(data['lastKnownTimeUpdatedAt'])
 	intLastKnownTime = int(data['lastKnownTime'])
-	now = toTimestampSeconds(datetime.now())
+	now = toTimestampMilliseconds(datetime.now())
 	oldPredictedTime = sessions[users[userId].sessionId].lastKnownTime + \
 	(0 if sessions[users[userId].sessionId].state == 'paused' else (
-																now - toTimestampSeconds(sessions[users[userId].sessionId].lastKnownTimeUpdatedAt)
+																now - sessions[users[userId].sessionId].lastKnownTimeUpdatedAt
 																))
 	
 	newPredictedTime = intLastKnownTime + \
@@ -482,7 +473,7 @@ def onUpdateSession(sid, data):
 		timeStr = str(minutes) + ':' + padIntegerWithZeros(seconds, 2)
 		
 	sessions[users[userId].sessionId].lastKnownTime = intLastKnownTime
-	sessions[users[userId].sessionId].lastKnownTimeUpdatedAt = datetime.fromtimestamp(intLastKnownTimeUpdatedAt)
+	sessions[users[userId].sessionId].lastKnownTimeUpdatedAt = intLastKnownTimeUpdatedAt
 	sessions[users[userId].sessionId].state = data['state']
 	
 	if (stateUpdated and timeUpdated):
@@ -501,13 +492,16 @@ def onUpdateSession(sid, data):
 	writeToLog('User ' + userId + ' updated session ' + users[userId].sessionId + ' with time ' + json.dumps(data['lastKnownTime']) + ' and state ' + data['state'] + ' for epoch ' + json.dumps(data['lastKnownTimeUpdatedAt']) + '.')
 	writeToLog('users: ' + str(sessions[users[userId].sessionId].userIds))
 	for uId in sessions[users[userId].sessionId].userIds:
-		writeToLog('Sending update to user ' + uId + '.')
 		if (uId != userId):
-			users[userId].socket.emit('update', dict(
+			writeToLog('Sending update to user ' + uId + '.')			
+			io.emit('update', dict(
 												lastKnownTime = sessions[users[userId].sessionId].lastKnownTime,
 												lastKnownTimeUpdatedAt = sessions[users[userId].sessionId].lastKnownTimeUpdatedAt,
-												state = sessions[users[userId].sessionId].state)
+												state = sessions[users[userId].sessionId].state),
+												users[uId].id
 									)
+		else:
+			writeToLog('NOT Sending update to user ' + uId + '.')	
 	return tuple()
 # 
 @io.on('typing')
@@ -570,7 +564,7 @@ def onGetServerTime(sid, data):
 	else:
 		writeToLog('User ' + sid + ' pinged.')
 		
-	return toTimestampSeconds(datetime.now())
+	return toTimestampMilliseconds(datetime.now())
 		
 @io.on('disconnect')
 def onDisconnect(sid):
@@ -593,6 +587,23 @@ def onError(e):
 #   writeToLog('Listening on port %d.', server.address().port);
 # });
 	
+def sessionsToHTML():
+	html = '<p><h3>Active Sessions:</h3></p>'
+	
+	for sId, sess in sessions.iteritems():
+		html += '<p><b>Session: ' + sId + '</b><br />'
+		html += 'id: ' + sess.id + '<br />'
+		html += 'lastKnownTime: ' + str(sess.lastKnownTime) + '<br />'
+		html += 'lastKnownTimeUpdatedAt: ' + str(sess.lastKnownTimeUpdatedAt) + '<br />'
+		html += 'messages: ' + str(sess.messages) + '<br />'
+		html += 'ownerId: ' + str(sess.ownerId) + '<br />'
+		html += 'userIds: ' + str(sess.userIds) + '<br />'
+		html += 'videoId: ' + str(sess.videoId) + '<br />'
+		html += '</p>'
+		
+	return html
+		
+	
 def app(environ, start_response):
 
 	ctype = 'text/plain'
@@ -607,6 +618,9 @@ def app(environ, start_response):
 		response_body = str(len(sessions))
 	elif pathInfo == '/number-of-users':
 		response_body = str(len(users))
+	elif pathInfo == '/sessions':
+		ctype = 'text/html'
+		response_body = sessionsToHTML()
 	else:
 		ctype = 'text/html'
 		response_body = '''OK'''
@@ -626,35 +640,8 @@ import eventlet.wsgi
 from flask import Flask, render_template
 
 
-# app = Flask(__name__)
-# 
-# @app.after_request
-# def headers(response):
-# 	response.headers["Access-Control-Allow-Origin"] = "*"
-# 	response.headers["Access-Control-Allow-Credentials"] = "false"
-# 	return response
-# 
-# @app.route('/')
-# def index():
-# 	"""Serve the client-side application."""
-# 	#return render_template('index.html')
-# 	return "OK"
-# 
-# @io.on('connect', namespace='/chat')
-# def connect(sid, environ):
-# 	writeToLog("connect ", sid)
-# 
-# @io.on('chat message', namespace='/chat')
-# def message(sid, data):
-# 	writeToLog("message ", data)
-# 	io.emit(sid, 'reply')
-# 
-# @io.on('disconnect', namespace='/chat')
-# def disconnect(sid):
-# 	writeToLog('disconnect ', sid)
-
 if __name__ == '__main__':
-	# wrap Flask application with engineio's middleware
+	# wrap wsgi application with engineio's middleware
 	app = socketio.Middleware(io, app)
 
 	# deploy as an eventlet WSGI server
@@ -662,15 +649,5 @@ if __name__ == '__main__':
 	eventlet.wsgi.server(eventlet.listen((os.environ['OPENSHIFT_PYTHON_IP'], port)), app)
 	io.listen(app)
 	writeToLog("Listening on port: "  + str(port))
-
-#
-# Below for testing only
-#
-# if __name__ == '__main__':
-# 	from wsgiref.simple_server import make_server
-# 	httpd = make_server('localhost', 3000, application)
-# 	# Wait for a single request, serve it and quit.
-# 	httpd.handle_request()
-
-
-#writeToLog(makeId())
+	
+	
