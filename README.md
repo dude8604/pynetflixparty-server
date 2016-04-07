@@ -4,6 +4,7 @@ This is a Python port of the server for Stephan Boyers' Netflix Party Chrome ext
 
 Requires:
 * pynetflixparty-server (can install with pip)
+* eventlet
 
 ----------------------
 
